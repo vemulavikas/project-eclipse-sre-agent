@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101a2b">
+    <title>Signal Desk | SRE Incident Triage</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Signal Desk home">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span>Signal Desk</span>
+      </a>
+      <div class="connection" id="connection-status" role="status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>Checking Prometheus…</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="intro">
+        <p class="eyebrow">OBSERVE · UNDERSTAND · RESPOND</p>
+        <h1>Incident triage,<br><span>grounded in your signals.</span></h1>
+        <p class="intro-copy">Investigate a multi-source simulated production incident from evidence timeline to human-approved recovery, verification, and a post-incident report. Switch to live Prometheus queries when ready.</p>
+      </section>
+
+      <section class="panel alerts-panel" aria-labelledby="alerts-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">LIVE FROM PROMETHEUS</p>
+            <h2 id="alerts-heading">Active alerts</h2>
+          </div>
+          <button class="button button-secondary" id="refresh-alerts" type="button">Refresh</button>
+        </div>
+        <div id="alerts" class="alerts-list" aria-live="polite">
+          <p class="muted">Loading alerts…</p>
+        </div>
+      </section>
+
+      <section class="panel investigate-panel" aria-labelledby="investigate-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">INVESTIGATION</p>
+            <h2 id="investigate-heading">Ask a focused question</h2>
+          </div>
+        </div>
+        <form id="investigation-form">
+          <label for="mode">Investigation mode</label>
+          <select id="mode" name="mode">
+            <option value="demo">Eclipse challenge demo — simulated incident</option>
+            <option value="live">Live Prometheus query</option>
+          </select>
+          <label for="incident">What are you investigating?</label>
+          <textarea id="incident" name="incident" rows="3" maxlength="4000" placeholder="Example: Elevated checkout latency after the latest deployment"></textarea>
+          <label class="ai-opt-in" id="ai-opt-in">
+            <input id="use-ai" type="checkbox">
+            Request an optional AI second opinion
+          </label>
+          <p class="privacy-note" id="ai-privacy-note">When selected, the simulated incident evidence and hypotheses are sent to your configured AI provider. AI output cannot approve or execute actions.</p>
+          <div id="live-query-field" hidden>
+            <label for="query">PromQL query <span class="required">Required</span></label>
+            <textarea id="query" name="query" rows="3" maxlength="2000" spellcheck="false">up</textarea>
+          </div>
+          <div class="form-footer">
+            <p class="privacy-note" id="mode-note">Uses bundled simulated logs, metrics, alert, deployment, commit, and dependency evidence. Remediation is simulated only.</p>
+            <button class="button button-primary" id="investigate-button" type="submit">Investigate incident <span aria-hidden="true">→</span></button>
+          </div>
+          <p class="form-error" id="form-error" role="alert" hidden></p>
+        </form>
+      </section>
+
+      <section class="panel workflow-panel" id="workflow-results" aria-labelledby="workflow-heading" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">INPUT → UNDERSTAND → PLAN → ACT → VERIFY</p>
+            <h2 id="workflow-heading">Incident investigation</h2>
+          </div>
+          <span class="simulation-badge">SIMULATION</span>
+        </div>
+        <p class="muted" id="workflow-summary"></p>
+        <div class="source-list" id="source-list"></div>
+        <div class="workflow-section">
+          <h3>Temporal evidence</h3>
+          <ol class="timeline" id="timeline"></ol>
+        </div>
+        <div class="workflow-section">
+          <h3>Root-cause hypotheses</h3>
+          <div id="hypotheses" class="hypothesis-list"></div>
+          <div id="demo-ai-block" class="ai-block" hidden>
+            <h3>Optional AI second opinion</h3>
+            <p id="demo-ai-assessment"></p>
+            <p class="ai-error" id="demo-ai-error"></p>
+          </div>
+        </div>
+        <div class="workflow-section">
+          <h3>Remediation plan</h3>
+          <p class="muted">High-impact actions are blocked until a human explicitly approves them. Demo actions never affect a real service.</p>
+          <ol class="plan-list" id="plan"></ol>
+          <div id="approval-controls" class="approval-controls" hidden></div>
+          <div id="escalation" class="escalation" hidden></div>
+          <button class="button button-primary" id="verify-button" type="button" hidden>Verify recovery</button>
+          <div id="verification" class="verification" hidden></div>
+          <a class="button button-secondary report-link" id="report-link" hidden>Download post-incident report</a>
+        </div>
+      </section>
+
+      <section class="panel results-panel" id="results-panel" aria-labelledby="results-heading" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">INVESTIGATION RESULT</p>
+            <h2 id="results-heading">What the signals show</h2>
+          </div>
+        </div>
+        <div class="assessment-block">
+          <h3>Evidence summary</h3>
+          <p id="assessment"></p>
+        </div>
+        <div class="ai-block" id="ai-block" hidden>
+          <h3>AI-assisted triage</h3>
+          <p id="ai-assessment"></p>
+          <p class="ai-error" id="ai-error"></p>
+        </div>
+        <div class="results-grid">
+          <div>
+            <h3>Metric series</h3>
+            <div class="table-wrap" id="metrics-result"></div>
+          </div>
+          <div>
+            <h3>Alert context</h3>
+            <div id="result-alerts" class="alerts-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <span>Signal Desk</span>
+        <span>Live mode read-only · Demo actions simulated</span>
+      </footer>
+    </main>
+  </body>
+</html>

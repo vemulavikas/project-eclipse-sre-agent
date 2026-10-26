@@ -1,0 +1,81 @@
+{
+  "id": "checkout-latency",
+  "title": "Checkout latency after release",
+  "service": "checkout",
+  "summary": "Checkout latency and errors rose shortly after a release; payment calls are timing out.",
+  "started_at": "2026-10-26T14:08:00Z",
+  "query": "sum(rate(http_requests_total{service=\"checkout\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"checkout\"}[5m]))",
+  "metrics": {
+    "baseline": {
+      "error_rate": 0.004,
+      "p95_latency_seconds": 0.24
+    },
+    "current": {
+      "error_rate": 0.184,
+      "p95_latency_seconds": 2.42
+    },
+    "after_rollback": {
+      "error_rate": 0.006,
+      "p95_latency_seconds": 0.29,
+      "active_alerts": 0,
+      "version": "v2.3.6"
+    }
+  },
+  "events": [
+    {
+      "id": "deploy-1",
+      "source": "deployment",
+      "timestamp": "2026-10-26T14:02:00Z",
+      "title": "checkout v2.3.7 deployed",
+      "details": "Production rollout completed for checkout v2.3.7.",
+      "version": "v2.3.7"
+    },
+    {
+      "id": "commit-1",
+      "source": "git",
+      "timestamp": "2026-10-26T13:51:00Z",
+      "title": "7a91c2e changed payment retry middleware",
+      "details": "Commit 7a91c2e changed retry behavior and the payment client timeout in checkout.",
+      "sha": "7a91c2e",
+      "author": "release-bot"
+    },
+    {
+      "id": "log-1",
+      "source": "logs",
+      "timestamp": "2026-10-26T14:05:12Z",
+      "title": "Payment client timeout errors",
+      "details": "checkout: PaymentClient request timed out after 2000ms; retry attempt 3/3.",
+      "severity": "error",
+      "service": "checkout"
+    },
+    {
+      "id": "dependency-1",
+      "source": "dependency",
+      "timestamp": "2026-10-26T14:06:00Z",
+      "title": "checkout → payment-api degraded",
+      "details": "Payment API calls from checkout show elevated timeouts; payment-api health checks remain available.",
+      "from": "checkout",
+      "to": "payment-api",
+      "state": "degraded"
+    },
+    {
+      "id": "metrics-1",
+      "source": "metrics",
+      "timestamp": "2026-10-26T14:07:00Z",
+      "title": "Error rate and p95 latency elevated",
+      "details": "5xx ratio increased from 0.4% to 18.4%; p95 latency increased from 240ms to 2.42s.",
+      "error_rate": 0.184,
+      "p95_latency_seconds": 2.42
+    },
+    {
+      "id": "alert-1",
+      "source": "alert",
+      "timestamp": "2026-10-26T14:08:00Z",
+      "title": "CheckoutHighErrorRate firing",
+      "details": "Checkout 5xx error rate exceeded the 5% threshold.",
+      "severity": "critical",
+      "state": "firing"
+    }
+  ],
+  "previous_version": "v2.3.6"
+}
