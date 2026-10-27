@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from agent.investigator import Investigator
-from agent.workflow import DemoIncidentWorkflow, WorkflowError
+from agent.workflow import IncidentWorkflow, WorkflowError
 from incidents.models import Investigation
 from tools.prometheus import PrometheusClient, PrometheusError
 
@@ -48,7 +48,7 @@ def load_project_env() -> None:
 def create_server(host: str, port: int) -> ThreadingHTTPServer:
     prometheus = PrometheusClient()
     investigator = Investigator(prometheus)
-    workflow = DemoIncidentWorkflow(ROOT / "incidents" / "scenarios" / "checkout_latency.json")
+    workflow = IncidentWorkflow(ROOT / "incidents" / "scenarios" / "checkout_latency.json")
 
     class SRERequestHandler(BaseHTTPRequestHandler):
         server_version = "SREIncidentDashboard/1.0"

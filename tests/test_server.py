@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import http.client
 import json
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from agent.server import create_server
+from agent.workflow import IncidentWorkflow
 from gateway import MissingAPIKeyError
 
 
@@ -88,6 +91,39 @@ class DashboardServerTests(unittest.TestCase):
         status, payload = self._request("POST", "/api/investigate", {"query": ""})
         self.assertEqual(status, 400)
         self.assertEqual(payload, {"error": "A PromQL query is required."})
+
+    def test_demo_workflow_handles_zero_baseline_metrics(self) -> None:
+        scenario = {
+            "id": "zero-latency",
+            "title": "Zero baseline incident",
+            "service": "checkout",
+            "summary": "Regression with no prior latency baseline.",
+            "query": "sum(rate(queries_total[5m]))",
+            "metrics": {
+                "baseline": {"error_rate": 0.0, "p95_latency_seconds": 0.0},
+                "current": {"error_rate": 0.12, "p95_latency_seconds": 0.6},
+                "after_rollback": {"error_rate": 0.01, "p95_latency_seconds": 0.1, "active_alerts": 0, "version": "v1"},
+            },
+            "events": [
+                {
+                    "id": "deploy-1",
+                    "source": "deployment",
+                    "timestamp": "2026-10-26T14:02:00Z",
+                    "title": "release deployed",
+                    "details": "release deployed",
+                    "version": "v2",
+                }
+            ],
+            "previous_version": "v1",
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(scenario, handle)
+            temp_path = Path(handle.name)
+        self.addCleanup(lambda: temp_path.unlink(missing_ok=True))
+        workflow = IncidentWorkflow(temp_path)
+        session = workflow.investigate("Regression during rollout")
+        self.assertEqual(session["metrics"]["p95_latency_multiplier"], 1.0)
+        self.assertIn("infinite", session["hypotheses"][0]["reasoning"])
 
     def test_demo_requires_approval_then_verifies_and_generates_report(self) -> None:
         status, session = self._request(

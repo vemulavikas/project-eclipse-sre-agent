@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import threading
 import uuid
 from datetime import datetime
@@ -16,7 +17,7 @@ class WorkflowError(Exception):
     """Raised when an incident workflow transition is invalid."""
 
 
-class DemoIncidentWorkflow:
+class IncidentWorkflow:
     """Analyze a fixture, gate a simulated action, and verify its outcome."""
 
     def __init__(self, scenario_path: Path) -> None:
@@ -40,11 +41,15 @@ class DemoIncidentWorkflow:
             source = str(event.get("source", "unknown"))
             source_groups[source] = source_groups.get(source, 0) + 1
 
-        metrics = self._scenario["metrics"]
-        before = metrics["baseline"]
-        current = metrics["current"]
-        error_increase = current["error_rate"] - before["error_rate"]
-        latency_increase = current["p95_latency_seconds"] / before["p95_latency_seconds"]
+        metrics = self._scenario.get("metrics", {})
+        before = metrics.get("baseline", {}) if isinstance(metrics, dict) else {}
+        current = metrics.get("current", {}) if isinstance(metrics, dict) else {}
+        before_error_rate = self._coerce_float(before.get("error_rate"), 0.0)
+        current_error_rate = self._coerce_float(current.get("error_rate"), before_error_rate)
+        before_latency = self._coerce_float(before.get("p95_latency_seconds"), 0.0)
+        current_latency = self._coerce_float(current.get("p95_latency_seconds"), before_latency)
+        error_increase = current_error_rate - before_error_rate
+        latency_increase = self._safe_ratio(current_latency, before_latency)
         relevant_ids = [
             event["id"]
             for event in events
@@ -58,7 +63,7 @@ class DemoIncidentWorkflow:
                 "reasoning": (
                     f"The relevant code change preceded the deployment; payment timeouts "
                     f"began 3 minutes after rollout. The error ratio rose by "
-                    f"{error_increase:.1%} and p95 latency increased {latency_increase:.1f}×, "
+                    f"{error_increase:.1%} and p95 latency increased {self._format_multiplier(latency_increase)}, "
                     "while the dependency health check remained available."
                 ),
                 "evidence_ids": relevant_ids,
@@ -110,6 +115,7 @@ class DemoIncidentWorkflow:
                 "description": "Run after the simulated rollback has completed.",
             },
         ]
+        multiplier = 1.0 if math.isinf(latency_increase) else round(latency_increase, 2)
         session = {
             "session_id": session_id,
             "mode": "demo",
@@ -127,7 +133,7 @@ class DemoIncidentWorkflow:
                 "baseline": before,
                 "current": current,
                 "error_rate_increase": round(error_increase, 4),
-                "p95_latency_multiplier": round(latency_increase, 2),
+                "p95_latency_multiplier": multiplier,
             },
             "hypotheses": hypotheses,
             "plan": plan,
@@ -254,28 +260,37 @@ class DemoIncidentWorkflow:
             rollback = self._require_action(session, "rollback-checkout")
             if rollback["status"] != "executed":
                 raise WorkflowError("Recovery verification is blocked until the approved action executes.")
-            metrics = self._scenario["metrics"]
-            after = metrics["after_rollback"]
+            metrics = self._scenario.get("metrics", {})
+            after = metrics.get("after_rollback", {}) if isinstance(metrics, dict) else {}
+            error_rate = self._coerce_float(after.get("error_rate"), float("inf"))
+            latency_seconds = self._coerce_float(after.get("p95_latency_seconds"), float("inf"))
+            active_alerts = 0
+            if "active_alerts" in after:
+                try:
+                    active_alerts = int(after["active_alerts"])
+                except (TypeError, ValueError):
+                    active_alerts = 1
+            restored_version = str(after.get("version", ""))
             checks = [
                 {
                     "name": "Error rate below 5% threshold",
-                    "passed": after["error_rate"] < 0.05,
-                    "observed": f"{after['error_rate']:.1%}",
+                    "passed": error_rate < 0.05,
+                    "observed": f"{error_rate:.1%}",
                 },
                 {
                     "name": "p95 latency below 1 second",
-                    "passed": after["p95_latency_seconds"] < 1,
-                    "observed": f"{after['p95_latency_seconds']:.2f}s",
+                    "passed": latency_seconds < 1,
+                    "observed": f"{latency_seconds:.2f}s",
                 },
                 {
                     "name": "No active firing alerts after recovery",
-                    "passed": after["active_alerts"] == 0,
-                    "observed": f"{after['active_alerts']} active alerts",
+                    "passed": active_alerts == 0,
+                    "observed": f"{active_alerts} active alerts",
                 },
                 {
                     "name": "Previous known-good version restored",
-                    "passed": after["version"] == self._scenario["previous_version"],
-                    "observed": after["version"],
+                    "passed": restored_version == self._scenario.get("previous_version", ""),
+                    "observed": restored_version,
                 },
             ]
             verification = {
@@ -310,6 +325,32 @@ class DemoIncidentWorkflow:
             if action["id"] == action_id:
                 return action
         raise WorkflowError("Remediation step not found.")
+
+    @staticmethod
+    def _coerce_float(value: Any, default: float) -> float:
+        if isinstance(value, bool):
+            return float(value)
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return float(default)
+        if math.isnan(number) or math.isinf(number):
+            return float(default)
+        return number
+
+    @staticmethod
+    def _safe_ratio(current: float, baseline: float) -> float:
+        if baseline == 0:
+            return math.inf if current > 0 else 1.0
+        return current / baseline
+
+    @staticmethod
+    def _format_multiplier(value: float) -> str:
+        if math.isinf(value):
+            return "infinite×"
+        if value == 0:
+            return "0.0×"
+        return f"{value:.1f}×"
 
     @staticmethod
     def _parse_timestamp(value: Any) -> datetime:

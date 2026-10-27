@@ -1,26 +1,27 @@
-# Signal Desk — Eclipse incident agent
+# Signal Desk — SRE incident triage
 
-Signal Desk demonstrates the Eclipse workflow:
+Signal Desk is an incident triage workspace for SRE and operations teams:
 
 **INPUT → UNDERSTAND → PLAN → USE TOOLS → ACT → VERIFY / ESCALATE → REPORT**
 
-The default **Eclipse challenge demo** runs end-to-end against a bundled
-simulated checkout incident. Its deterministic investigator correlates a
+The guided scenario runs end-to-end against a bundled simulated checkout
+incident. Its deterministic investigator correlates a
 Git commit, deployment, application log, dependency health, Prometheus-style
 metrics, and alert in timestamp order; ranks root-cause hypotheses with
 transparent heuristic confidence; proposes a remediation; gates the simulated
 high-impact rollback on explicit human approval; and either verifies recovery
 or escalates a rejected action. It then makes a Markdown post-incident report
-available for download.
+available for download. This scenario is designed to explore the workflow
+locally; it does not connect to production systems.
 The AI second opinion is opt-in; when selected, the fixture incident context is
 sent to the configured AI provider.
 
-**Demo limitations:** all six data sources are fixture evidence in
+**Scenario boundaries:** all six data sources are fixture evidence in
 `incidents/scenarios/checkout_latency.json`; confidence values are rule-based
 demonstration estimates, not calibrated probabilities. The rollback and
 post-rollback observations are simulated. No real deployment, Git host, log
 system, dependency monitor, or production service is changed or queried by the
-demo. An optional, explicit AI second opinion can be requested; it cannot
+scenario. An optional, explicit AI second opinion can be requested; it cannot
 change the evidence, confidence score, approval state, or remediation.
 
 **Live Prometheus mode** separately connects to a configured Prometheus server
@@ -35,7 +36,7 @@ NVIDIA NIM/Nebius AI analysis is available for the live investigation mode.
 - A reachable Prometheus server only for live mode
 - Optional AI provider credentials for AI-assisted analysis
 
-## Run the challenge demo
+## Run the code locally
 
 From the repository root:
 
@@ -43,7 +44,7 @@ From the repository root:
 py -m agent.server
 ```
 
-Open <http://127.0.0.1:8000>, leave **Eclipse challenge demo** selected, and
+Open <http://127.0.0.1:8000>, leave **Guided scenario — simulated incident** selected, and
 choose **Investigate incident**. Review the source evidence, timeline, and
 hypotheses. To demonstrate recovery, enter an approver and rationale, confirm
 that the action is simulated, approve the rollback, and choose **Verify
@@ -81,8 +82,8 @@ remain available and the response explains why AI analysis was unavailable.
 The dashboard binds to loopback by default. Approval is a workflow safeguard,
 not identity authentication; approver names are self-reported. Do not expose
 this development server to a network without adding authentication, audit
-storage, and appropriate access controls. The demo has no production write
-connector.
+storage, and appropriate access controls. The guided scenario has no production
+write connector.
 
 ## Workflow API
 
@@ -103,7 +104,7 @@ py -m unittest discover -v
 Tests use mocked HTTP responses and the simulated scenario; no live monitoring
 or AI credentials are required.
 
-## Round 2 submission materials
+## Learn more
 
-- [Submission brief and architecture](docs/ROUND2_SUBMISSION.md)
-- [Demo runbook and walkthrough](docs/DEMO_RUNBOOK.md)
+- [Product overview and architecture](docs/PRODUCT_OVERVIEW.md)
+- [User guide](docs/USER_GUIDE.md)

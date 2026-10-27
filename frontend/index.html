@@ -50,7 +50,7 @@
         <form id="investigation-form">
           <label for="mode">Investigation mode</label>
           <select id="mode" name="mode">
-            <option value="demo">Eclipse challenge demo — simulated incident</option>
+            <option value="demo">Guided scenario — simulated incident</option>
             <option value="live">Live Prometheus query</option>
           </select>
           <label for="incident">What are you investigating?</label>
@@ -97,7 +97,7 @@
         </div>
         <div class="workflow-section">
           <h3>Remediation plan</h3>
-          <p class="muted">High-impact actions are blocked until a human explicitly approves them. Demo actions never affect a real service.</p>
+          <p class="muted">High-impact actions are blocked until a human explicitly approves them. Scenario actions never affect a real service.</p>
           <ol class="plan-list" id="plan"></ol>
           <div id="approval-controls" class="approval-controls" hidden></div>
           <div id="escalation" class="escalation" hidden></div>
@@ -137,7 +137,7 @@
 
       <footer>
         <span>Signal Desk</span>
-        <span>Live mode read-only · Demo actions simulated</span>
+        <span>Live mode read-only · Scenario actions simulated</span>
       </footer>
     </main>
   </body>
