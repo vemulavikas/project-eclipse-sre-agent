@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -32,6 +33,11 @@ class _Prometheus:
 
 class DashboardServerTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.metrics_token_patcher = patch.dict(
+            os.environ, {"METRICS_BEARER_TOKEN": "test-metrics-token"}
+        )
+        self.metrics_token_patcher.start()
+        self.addCleanup(self.metrics_token_patcher.stop)
         self.prometheus = _Prometheus()
         self.server_patcher = patch("agent.server.PrometheusClient", return_value=self.prometheus)
         self.server_patcher.start()
@@ -47,12 +53,18 @@ class DashboardServerTests(unittest.TestCase):
         self.server.server_close()
 
     def _request(
-        self, method: str, path: str, body: dict[str, object] | None = None
+        self,
+        method: str,
+        path: str,
+        body: dict[str, object] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> tuple[int, dict[str, object] | bytes]:
         connection = http.client.HTTPConnection(*self.server.server_address)
         encoded_body = json.dumps(body).encode() if body is not None else None
-        headers = {"Content-Type": "application/json"} if encoded_body is not None else {}
-        connection.request(method, path, body=encoded_body, headers=headers)
+        request_headers = dict(headers or {})
+        if encoded_body is not None:
+            request_headers["Content-Type"] = "application/json"
+        connection.request(method, path, body=encoded_body, headers=request_headers)
         response = connection.getresponse()
         payload = response.read()
         content_type = response.getheader("Content-Type", "")
@@ -66,6 +78,24 @@ class DashboardServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b"Signal Desk", page)
         self.assertEqual(self._request("GET", "/api/health"), (200, {"status": "connected"}))
+
+    def test_metrics_endpoint_requires_token_and_reports_requests(self) -> None:
+        self._request("GET", "/api/health")
+        status, payload = self._request("GET", "/metrics")
+        self.assertEqual(status, 401)
+        self.assertEqual(payload, {"error": "Metrics authentication is required."})
+
+        status, payload = self._request(
+            "GET",
+            "/metrics",
+            headers={"Authorization": "Bearer test-metrics-token"},
+        )
+        self.assertEqual(status, 200)
+        self.assertIsInstance(payload, bytes)
+        self.assertIn(b"# TYPE signal_desk_http_requests_total counter", payload)
+        self.assertIn(b'path="/api/health"', payload)
+        self.assertIn(b'path="/metrics"', payload)
+        self.assertNotIn(b"test-metrics-token", payload)
 
     @patch(
         "agent.investigator.ai_gateway.generate",

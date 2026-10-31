@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import mimetypes
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -49,14 +51,42 @@ def create_server(host: str, port: int) -> ThreadingHTTPServer:
     prometheus = PrometheusClient()
     investigator = Investigator(prometheus)
     workflow = IncidentWorkflow(ROOT / "incidents" / "scenarios" / "checkout_latency.json")
+    request_counts: dict[tuple[str, str, int], int] = {}
+    metrics_lock = threading.Lock()
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
 
     class SRERequestHandler(BaseHTTPRequestHandler):
         server_version = "SREIncidentDashboard/1.0"
+
+        def send_response(self, code: int, message: str | None = None) -> None:
+            path = urlsplit(self.path).path
+            known_paths = set(STATIC_FILES) | {
+                "/api/health",
+                "/api/alerts",
+                "/api/query",
+                "/api/scenarios",
+                "/api/investigate",
+                "/api/actions/approve",
+                "/api/verify",
+                "/metrics",
+            }
+            if path.startswith("/api/report/"):
+                path = "/api/report/{session_id}"
+            elif path not in known_paths:
+                path = "/other"
+            method = self.command if self.command in {"GET", "POST"} else "OTHER"
+            with metrics_lock:
+                key = (method, path, code)
+                request_counts[key] = request_counts.get(key, 0) + 1
+            super().send_response(code, message)
 
         def do_GET(self) -> None:
             parsed = urlsplit(self.path)
             if parsed.path in STATIC_FILES:
                 self._serve_static(STATIC_FILES[parsed.path])
+                return
+            if parsed.path == "/metrics":
+                self._metrics()
                 return
             if parsed.path == "/api/health":
                 self._health()
@@ -89,6 +119,34 @@ def create_server(host: str, port: int) -> ThreadingHTTPServer:
                     self._json_response(404, {"error": str(error)})
                 return
             self._json_response(404, {"error": "Not found."})
+
+        def _metrics(self) -> None:
+            if not metrics_token:
+                self._json_response(503, {"error": "Metrics authentication is not configured."})
+                return
+            if not hmac.compare_digest(
+                self.headers.get("Authorization", "").encode("utf-8"),
+                f"Bearer {metrics_token}".encode("utf-8"),
+            ):
+                self._json_response(401, {"error": "Metrics authentication is required."})
+                return
+            with metrics_lock:
+                snapshot = sorted(request_counts.items())
+            lines = [
+                "# HELP signal_desk_http_requests_total Total HTTP requests handled by Signal Desk.",
+                "# TYPE signal_desk_http_requests_total counter",
+            ]
+            for (method, path, status), count in snapshot:
+                lines.append(
+                    f'signal_desk_http_requests_total{{method="{method}",path="{path}",status="{status}"}} {count}'
+                )
+            body = ("\n".join(lines) + "\n").encode("utf-8")
+            self._send_headers(
+                200,
+                "text/plain; version=0.0.4; charset=utf-8",
+                len(body),
+            )
+            self.wfile.write(body)
 
         def do_POST(self) -> None:
             path = urlsplit(self.path).path

@@ -1,0 +1,9 @@
+services:
+  - type: pserv
+    name: signal-desk-prometheus
+    runtime: docker
+    dockerfilePath: ./monitoring/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: METRICS_BEARER_TOKEN
+        sync: false

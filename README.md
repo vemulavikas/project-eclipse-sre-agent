@@ -38,7 +38,18 @@ NVIDIA NIM/Nebius AI analysis is available for the live investigation mode.
 
 ## Run the code locally
 
-From the repository root:
+To run the dashboard with a local Prometheus server using Docker Compose, copy
+`.env.example` to `.env` and run:
+
+```powershell
+docker compose up --build
+```
+
+Open <http://127.0.0.1:8000>. Prometheus is available at
+<http://127.0.0.1:9090>; both ports are bound to loopback. The local Compose
+stack uses a development-only metrics token. Do not reuse it in a deployment.
+
+To run only the Python server without Docker, run this from the repository root:
 
 ```powershell
 py -m agent.server
@@ -78,6 +89,26 @@ remain available and the response explains why AI analysis was unavailable.
 | `AI_REQUEST_TIMEOUT_SECONDS` | `60` | AI request timeout |
 | `NVIDIA_API_KEY` / `NEBIUS_API_KEY` | empty | Selected provider credential |
 | `NVIDIA_MODEL` / `NEBIUS_MODEL` | empty | Selected provider model ID |
+| `METRICS_BEARER_TOKEN` | empty | Bearer token required to enable `/metrics` |
+
+### Render Prometheus setup
+
+The root `render.yaml` defines a **private** Prometheus service. Create a
+Blueprint from this repository in Render and deploy that service in the same
+region as the existing dashboard. The private service may require a paid Render
+plan. It scrapes the public dashboard URL over HTTPS, while the Prometheus
+server itself is reachable only over Render's private network.
+
+Set `METRICS_BEARER_TOKEN` to the same strong, randomly generated secret in the
+Prometheus service and the existing dashboard service. Then set the dashboard's
+`PROMETHEUS_URL` to `http://signal-desk-prometheus:9090` (or use the exact
+internal address shown by Render). Redeploy the dashboard. The `/metrics`
+endpoint rejects requests without the bearer token. Keep the token in Render's
+environment settings; never commit it.
+
+Prometheus uses ephemeral storage in this setup, so its time series history is
+lost if the service is recreated. Configure a persistent disk in Render if
+history must survive service replacement.
 
 The dashboard binds to loopback by default. Approval is a workflow safeguard,
 not identity authentication; approver names are self-reported. Do not expose
