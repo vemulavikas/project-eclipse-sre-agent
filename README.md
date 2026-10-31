@@ -46,8 +46,9 @@ docker compose up --build
 ```
 
 Open <http://127.0.0.1:8000>. Prometheus is available at
-<http://127.0.0.1:9090>; both ports are bound to loopback. The local Compose
-stack uses a development-only metrics token. Do not reuse it in a deployment.
+<http://127.0.0.1:9090>; this is the authenticated Prometheus API proxy, and
+both published ports are bound to loopback. The local Compose stack uses
+development-only token defaults. Do not reuse them in a deployment.
 
 To run only the Python server without Docker, run this from the repository root:
 

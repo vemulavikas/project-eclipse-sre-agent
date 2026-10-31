@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hmac
+import json
 import os
 import subprocess
+import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
@@ -13,6 +15,7 @@ from urllib.request import Request, urlopen
 
 
 UPSTREAM = "http://127.0.0.1:9091"
+CONFIG_TEMPLATE = "/etc/prometheus/prometheus.yml"
 
 
 def create_proxy_server(
@@ -67,6 +70,12 @@ def create_proxy_server(
     return ThreadingHTTPServer((host, port), PrometheusProxyHandler)
 
 
+def render_prometheus_config(template: str, token: str) -> str:
+    if not token:
+        raise ValueError("METRICS_BEARER_TOKEN must be configured.")
+    return template.replace("${METRICS_BEARER_TOKEN}", json.dumps(token))
+
+
 def _wait_for_prometheus(process: subprocess.Popen[bytes]) -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
@@ -85,22 +94,34 @@ def main() -> None:
     if not token:
         raise SystemExit("PROMETHEUS_BEARER_TOKEN must be configured.")
 
-    prometheus = subprocess.Popen(
-        [
-            "prometheus",
-            "--config.file=/etc/prometheus/prometheus.yml",
-            "--config.expand-env",
-            "--storage.tsdb.path=/prometheus",
-            "--web.listen-address=127.0.0.1:9091",
-        ]
-    )
+    config_path: str | None = None
+    prometheus: subprocess.Popen[bytes] | None = None
     try:
+        with open(CONFIG_TEMPLATE, encoding="utf-8") as template_file:
+            config_contents = render_prometheus_config(template_file.read(), token)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", suffix=".yml", delete=False
+        ) as config_file:
+            config_file.write(config_contents)
+            config_path = config_file.name
+
+        prometheus = subprocess.Popen(
+            [
+                "prometheus",
+                f"--config.file={config_path}",
+                "--storage.tsdb.path=/prometheus",
+                "--web.listen-address=127.0.0.1:9091",
+            ]
+        )
         _wait_for_prometheus(prometheus)
         port = int(os.getenv("PORT", "10000"))
         server = create_proxy_server("0.0.0.0", port, token)
     except (OSError, RuntimeError, ValueError) as error:
-        prometheus.terminate()
-        prometheus.wait(timeout=10)
+        if prometheus:
+            prometheus.terminate()
+            prometheus.wait(timeout=10)
+        if config_path:
+            os.unlink(config_path)
         raise SystemExit(str(error)) from None
 
     try:
@@ -109,12 +130,17 @@ def main() -> None:
         pass
     finally:
         server.server_close()
-        prometheus.terminate()
+        if prometheus:
+            prometheus.terminate()
         try:
-            prometheus.wait(timeout=10)
+            if prometheus:
+                prometheus.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            prometheus.kill()
-            prometheus.wait()
+            if prometheus:
+                prometheus.kill()
+                prometheus.wait()
+        if config_path:
+            os.unlink(config_path)
 
 
 if __name__ == "__main__":

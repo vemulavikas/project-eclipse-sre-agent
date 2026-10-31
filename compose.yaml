@@ -6,22 +6,21 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8000
-      PROMETHEUS_URL: http://prometheus:9090
+      PROMETHEUS_URL: http://prometheus:10000
       METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:-local-dev-token}
+      PROMETHEUS_BEARER_TOKEN: ${PROMETHEUS_BEARER_TOKEN:-local-dev-token}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
       - prometheus
 
   prometheus:
-    image: prom/prometheus:v3.5.0
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --config.expand-env
-      - --storage.tsdb.path=/prometheus
+    build:
+      context: .
+      dockerfile: monitoring/Dockerfile
     environment:
       METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:-local-dev-token}
+      PROMETHEUS_BEARER_TOKEN: ${PROMETHEUS_BEARER_TOKEN:-local-dev-token}
+      PORT: 10000
     ports:
-      - "127.0.0.1:9090:9090"
-    volumes:
-      - ./monitoring/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - "127.0.0.1:9090:10000"

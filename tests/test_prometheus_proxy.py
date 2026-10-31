@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import http.client
+import json
 import threading
 import unittest
 from unittest.mock import MagicMock, patch
 
-from monitoring.prometheus_proxy import create_proxy_server
+from monitoring.prometheus_proxy import create_proxy_server, render_prometheus_config
 
 
 class PrometheusProxyTests(unittest.TestCase):
@@ -70,6 +71,14 @@ class PrometheusProxyTests(unittest.TestCase):
     def test_proxy_requires_configured_token(self) -> None:
         with self.assertRaisesRegex(ValueError, "PROMETHEUS_BEARER_TOKEN"):
             create_proxy_server("127.0.0.1", 0, "")
+
+    def test_config_token_is_quoted_without_environment_expansion_flag(self) -> None:
+        token = 'token"with\\characters'
+        result = render_prometheus_config(
+            "credentials: ${METRICS_BEARER_TOKEN}\n", token
+        )
+        self.assertEqual(result, f"credentials: {json.dumps(token)}\n")
+        self.assertNotIn("--config.expand-env", result)
 
 
 if __name__ == "__main__":
