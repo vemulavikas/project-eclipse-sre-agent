@@ -80,6 +80,17 @@ class PrometheusProxyTests(unittest.TestCase):
         self.assertEqual(result, f"credentials: {json.dumps(token)}\n")
         self.assertNotIn("--config.expand-env", result)
 
+    def test_scrape_config_uses_metrics_token_not_proxy_token(self) -> None:
+        metrics_token = "dashboard-scrape-token"
+        prometheus_token = "prometheus-api-token"
+
+        result = render_prometheus_config(
+            "credentials: ${METRICS_BEARER_TOKEN}\n", metrics_token
+        )
+
+        self.assertIn(json.dumps(metrics_token), result)
+        self.assertNotIn(prometheus_token, result)
+
 
 if __name__ == "__main__":
     unittest.main()

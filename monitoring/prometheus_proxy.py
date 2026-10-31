@@ -70,10 +70,12 @@ def create_proxy_server(
     return ThreadingHTTPServer((host, port), PrometheusProxyHandler)
 
 
-def render_prometheus_config(template: str, token: str) -> str:
-    if not token:
+def render_prometheus_config(template: str, metrics_token: str) -> str:
+    if not metrics_token:
         raise ValueError("METRICS_BEARER_TOKEN must be configured.")
-    return template.replace("${METRICS_BEARER_TOKEN}", json.dumps(token))
+    return template.replace(
+        "${METRICS_BEARER_TOKEN}", json.dumps(metrics_token)
+    )
 
 
 def _wait_for_prometheus(process: subprocess.Popen[bytes]) -> None:
@@ -90,15 +92,20 @@ def _wait_for_prometheus(process: subprocess.Popen[bytes]) -> None:
 
 
 def main() -> None:
-    token = os.getenv("PROMETHEUS_BEARER_TOKEN", "").strip()
-    if not token:
+    prometheus_token = os.getenv("PROMETHEUS_BEARER_TOKEN", "").strip()
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+    if not prometheus_token:
         raise SystemExit("PROMETHEUS_BEARER_TOKEN must be configured.")
+    if not metrics_token:
+        raise SystemExit("METRICS_BEARER_TOKEN must be configured.")
 
     config_path: str | None = None
     prometheus: subprocess.Popen[bytes] | None = None
     try:
         with open(CONFIG_TEMPLATE, encoding="utf-8") as template_file:
-            config_contents = render_prometheus_config(template_file.read(), token)
+            config_contents = render_prometheus_config(
+                template_file.read(), metrics_token
+            )
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", suffix=".yml", delete=False
         ) as config_file:
@@ -115,7 +122,7 @@ def main() -> None:
         )
         _wait_for_prometheus(prometheus)
         port = int(os.getenv("PORT", "10000"))
-        server = create_proxy_server("0.0.0.0", port, token)
+        server = create_proxy_server("0.0.0.0", port, prometheus_token)
     except (OSError, RuntimeError, ValueError) as error:
         if prometheus:
             prometheus.terminate()
