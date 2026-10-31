@@ -1,9 +1,13 @@
 services:
-  - type: pserv
+  - type: web
     name: signal-desk-prometheus
     runtime: docker
+    plan: free
     dockerfilePath: ./monitoring/Dockerfile
     dockerContext: .
+    healthCheckPath: /-/ready
     envVars:
       - key: METRICS_BEARER_TOKEN
+        sync: false
+      - key: PROMETHEUS_BEARER_TOKEN
         sync: false

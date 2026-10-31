@@ -93,22 +93,25 @@ remain available and the response explains why AI analysis was unavailable.
 
 ### Render Prometheus setup
 
-The root `render.yaml` defines a **private** Prometheus service. Create a
-Blueprint from this repository in Render and deploy that service in the same
-region as the existing dashboard. The private service may require a paid Render
-plan. It scrapes the public dashboard URL over HTTPS, while the Prometheus
-server itself is reachable only over Render's private network.
+The root `render.yaml` defines a free-tier public Prometheus web service. Its
+read-only API is protected by a bearer-authenticated proxy; only the harmless
+`/-/ready` health check is unauthenticated. Create a Blueprint from this
+repository in Render and deploy `signal-desk-prometheus`.
 
-Set `METRICS_BEARER_TOKEN` to the same strong, randomly generated secret in the
-Prometheus service and the existing dashboard service. Then set the dashboard's
-`PROMETHEUS_URL` to `http://signal-desk-prometheus:9090` (or use the exact
-internal address shown by Render). Redeploy the dashboard. The `/metrics`
-endpoint rejects requests without the bearer token. Keep the token in Render's
-environment settings; never commit it.
+Set two different strong secrets in Render's Blueprint prompt and in the
+existing dashboard service's Environment settings:
 
-Prometheus uses ephemeral storage in this setup, so its time series history is
-lost if the service is recreated. Configure a persistent disk in Render if
-history must survive service replacement.
+- `METRICS_BEARER_TOKEN`: same value on both services; Prometheus uses it to
+  scrape the dashboard's protected `/metrics` endpoint.
+- `PROMETHEUS_BEARER_TOKEN`: same value on both services; the Prometheus
+  service's proxy requires it for API requests, and the dashboard sends it.
+
+On the dashboard service, set `PROMETHEUS_URL` to the public URL shown in the
+Prometheus service's Render settings, for example
+`https://signal-desk-prometheus.onrender.com`. Keep both tokens secret and out
+of Git. Free web services can spin down when idle, so the first dashboard
+request may take longer while Prometheus starts. Prometheus history is
+ephemeral and is lost when the service is recreated.
 
 The dashboard binds to loopback by default. Approval is a workflow safeguard,
 not identity authentication; approver names are self-reported. Do not expose
