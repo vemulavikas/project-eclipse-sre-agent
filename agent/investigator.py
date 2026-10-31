@@ -99,7 +99,7 @@ class Investigator:
                     "content": f"Assess this incident using the provided data:\n{context}",
                 },
             ],
-            max_tokens=500,
+            max_tokens=1500,
             temperature=0.2,
         )
         choices: Any = response.get("choices")

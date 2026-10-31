@@ -117,6 +117,25 @@ class DashboardServerTests(unittest.TestCase):
         self.assertEqual(payload["active_alerts"], [])
         self.assertIn("NVIDIA_API_KEY", payload["ai_error"])
 
+    @patch(
+        "agent.investigator.ai_gateway.generate",
+        new_callable=AsyncMock,
+        return_value={"choices": [{"message": {"content": "The up metric is available."}}]},
+    )
+    def test_live_investigation_allows_reasoning_model_output_budget(
+        self, generate: AsyncMock
+    ) -> None:
+        status, payload = self._request(
+            "POST",
+            "/api/investigate",
+            {"query": "up", "incident": "Smoke test"},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["ai_assessment"], "The up metric is available.")
+        generate.assert_awaited_once()
+        self.assertEqual(generate.await_args.kwargs["max_tokens"], 1500)
+
     def test_investigation_requires_promql(self) -> None:
         status, payload = self._request("POST", "/api/investigate", {"query": ""})
         self.assertEqual(status, 400)
